@@ -184,6 +184,42 @@ static void PopPvLine(int nDepth = 0, int vl = 0) {
   fflush(stdout);
 }
 
+// 输出主要变例
+static void PopPvLineBotzone(int nDepth = 0, int vl = 0) {
+    uint16_t *lpwmv;
+    uint32_t dwMoveStr;
+    // 如果尚未达到需要输出的深度，那么记录该深度和分值，以后再输出
+    if (nDepth > 0 && !Search2.bPopPv && !Search.bDebug) {
+        Search2.nPopDepth = nDepth;
+        Search2.vlPopValue = vl;
+        return;
+    }
+    // 输出时间和搜索结点数
+//    printf("info time %d nodes %d\n", (int) (GetTime() - Search2.llTime), Search2.nAllNodes);
+//    fflush(stdout);
+    if (nDepth == 0) {
+        // 如果是搜索结束后的输出，并且已经输出过，那么不必再输出
+        if (Search2.nPopDepth == 0) {
+            return;
+        }
+        // 获取以前没有输出的深度和分值
+        nDepth = Search2.nPopDepth;
+        vl = Search2.vlPopValue;
+    } else {
+        // 达到需要输出的深度，那么以后不必再输出
+        Search2.nPopDepth = Search2.vlPopValue = 0;
+    }
+//    printf("info depth %d score %d pv", nDepth, vl);
+    lpwmv = Search2.wmvPvLine;
+    while (*lpwmv != 0) {
+        dwMoveStr = MOVE_COORD(*lpwmv);
+//        printf(" %.4s", (const char *) &dwMoveStr);
+        lpwmv ++;
+    }
+//    printf("\n");
+//    fflush(stdout);
+}
+
 #endif
 
 // 无害裁剪
@@ -858,4 +894,217 @@ void SearchMain(int nDepth) {
   printf("\n");
   fflush(stdout);
 #endif
+}
+
+// 主搜索例程
+void SearchMainBotzone(int nDepth) {
+    int i, vl, vlLast, nDraw;
+    int nCurrTimer, nLimitTimer, nLimitNodes;
+    bool bUnique;
+#ifndef CCHESS_A3800
+    int nBookMoves;
+    uint32_t dwMoveStr;
+    BookStruct bks[MAX_GEN_MOVES];
+#endif
+    // 主搜索例程包括以下几个步骤：
+
+    // 1. 遇到和棋则直接返回
+    if (Search.pos.IsDraw() || Search.pos.RepStatus(3) > 0) {
+#ifndef CCHESS_A3800
+//        printf("nobestmove\n");
+//        fflush(stdout);
+        OutputBotzoneNone();
+#endif
+        return;
+    }
+
+#ifndef CCHESS_A3800
+    // 2. 从开局库中搜索着法
+    if (Search.bUseBook) {
+        // a. 获取开局库中的所有走法
+        nBookMoves = GetBookMoves(Search.pos, Search.szBookFile, bks);
+        if (nBookMoves > 0) {
+            vl = 0;
+            for (i = 0; i < nBookMoves; i ++) {
+                vl += bks[i].wvl;
+                dwMoveStr = MOVE_COORD(bks[i].wmv);
+                printf("info depth 0 score %d pv %.4s\n", bks[i].wvl, (const char *) &dwMoveStr);
+                fflush(stdout);
+            }
+            // b. 根据权重随机选择一个走法
+            vl = Search.rc4Random.NextLong() % (uint32_t) vl;
+            for (i = 0; i < nBookMoves; i ++) {
+                vl -= bks[i].wvl;
+                if (vl < 0) {
+                    break;
+                }
+            }
+            __ASSERT(vl < 0);
+            __ASSERT(i < nBookMoves);
+            // c. 如果开局库中的着法够成循环局面，那么不走这个着法
+            Search.pos.MakeMove(bks[i].wmv);
+            if (Search.pos.RepStatus(3) == 0) {
+                dwMoveStr = MOVE_COORD(bks[i].wmv);
+                printf("bestmove %.4s", (const char *) &dwMoveStr);
+                // d. 给出后台思考的着法(开局库中第一个即权重最大的后续着法)
+                nBookMoves = GetBookMoves(Search.pos, Search.szBookFile, bks);
+                Search.pos.UndoMakeMove();
+                if (nBookMoves > 0) {
+                    dwMoveStr = MOVE_COORD(bks[0].wmv);
+                    printf(" ponder %.4s", (const char *) &dwMoveStr);
+                }
+                printf("\n");
+                fflush(stdout);
+                return;
+            }
+            Search.pos.UndoMakeMove();
+        }
+    }
+#endif
+
+    // 3. 如果深度为零则返回静态搜索值
+    if (nDepth == 0) {
+#ifndef CCHESS_A3800
+        printf("info depth 0 score %d\n", SearchQuiesc(Search.pos, -MATE_VALUE, MATE_VALUE));
+        fflush(stdout);
+        printf("nobestmove\n");
+        fflush(stdout);
+#endif
+        return;
+    }
+
+    // 4. 生成根结点的每个着法
+    Search2.MoveSort.InitRoot(Search.pos, Search.nBanMoves, Search.wmvBanList);
+
+    // 5. 初始化时间和计数器
+    Search2.bStop = Search2.bPonderStop = Search2.bPopPv = Search2.bPopCurrMove = false;
+    Search2.nPopDepth = Search2.vlPopValue = 0;
+    Search2.nAllNodes = Search2.nMainNodes = Search2.nUnchanged = 0;
+    Search2.wmvPvLine[0] = 0;
+    ClearKiller(Search2.wmvKiller);
+    ClearHistory();
+    ClearHash();
+    // 由于 ClearHash() 需要消耗一定时间，所以计时从这以后开始比较合理
+    Search2.llTime = GetTime();
+    vlLast = 0;
+    // 如果走了10回合无用着法，那么允许主动提和，以后每隔8回合提和一次
+    nDraw = -Search.pos.LastMove().CptDrw;
+    if (nDraw > 5 && ((nDraw - 4) / 2) % 8 == 0) {
+        Search.bDraw = true;
+    }
+    bUnique = false;
+    nCurrTimer = 0;
+
+    // 6. 做迭代加深搜索
+    for (i = 1; i <= nDepth; i ++) {
+        // 需要输出主要变例时，第一个"info depth n"是不输出的
+#ifndef CCHESS_A3800
+        if (Search2.bPopPv || Search.bDebug) {
+//            printf("info depth %d\n", i);
+//            fflush(stdout);
+        }
+
+        // 7. 根据搜索的时间决定，是否需要输出主要变例和当前思考的着法
+        Search2.bPopPv = (nCurrTimer > 300);
+        Search2.bPopCurrMove = (nCurrTimer > 3000);
+#endif
+
+        // 8. 搜索根结点
+        vl = SearchRoot(i);
+        if (Search2.bStop) {
+            if (vl > -MATE_VALUE) {
+                vlLast = vl; // 跳出后，vlLast会用来判断认输或投降，所以需要给定最近一个值
+            }
+            break; // 没有跳出，则"vl"是可靠值
+        }
+
+        nCurrTimer = (int) (GetTime() - Search2.llTime);
+        // 9. 如果搜索时间超过适当时限，则终止搜索
+        if (Search.nGoMode == GO_MODE_TIMER) {
+            // a. 如果没有使用空着裁剪，那么适当时限减半(因为分枝因子加倍了)
+            nLimitTimer = (Search.bNullMove ? Search.nProperTimer : Search.nProperTimer / 2);
+            // b. 如果当前搜索值没有落后前一层很多，那么适当时限减半
+            nLimitTimer = (vl + DROPDOWN_VALUE >= vlLast ? nLimitTimer / 2 : nLimitTimer);
+            // c. 如果最佳着法连续多层没有变化，那么适当时限减半
+            nLimitTimer = (Search2.nUnchanged >= UNCHANGED_DEPTH ? nLimitTimer / 2 : nLimitTimer);
+            if (nCurrTimer > nLimitTimer) {
+                if (Search.bPonder) {
+                    Search2.bPonderStop = true; // 如果处于后台思考模式，那么只是在后台思考命中后立即中止搜索。
+                } else {
+                    vlLast = vl;
+                    break; // 不管是否跳出，"vlLast"都已更新
+                }
+            }
+        } else if (Search.nGoMode == GO_MODE_NODES) {
+            // nLimitNodes的计算方法与nLimitTimer是一样的
+            nLimitNodes = (Search.bNullMove ? Search.nNodes : Search.nNodes / 2);
+            nLimitNodes = (vl + DROPDOWN_VALUE >= vlLast ? nLimitNodes / 2 : nLimitNodes);
+            nLimitNodes = (Search2.nUnchanged >= UNCHANGED_DEPTH ? nLimitNodes / 2 : nLimitNodes);
+            // GO_MODE_NODES下是不延长后台思考时间的
+            if (Search2.nAllNodes > nLimitNodes) {
+                vlLast = vl;
+                break;
+            }
+        }
+        vlLast = vl;
+
+        // 10. 搜索到杀棋则终止搜索
+        if (vlLast > WIN_VALUE || vlLast < -WIN_VALUE) {
+            break;
+        }
+
+        // 11. 是唯一着法，则终止搜索
+        if (SearchUnique(1 - WIN_VALUE, i)) {
+            bUnique = true;
+            break;
+        }
+    }
+
+#ifdef CCHESS_A3800
+    Search.mvResult = Search2.wmvPvLine[0];
+#else
+    // 12. 输出最佳着法及其最佳应对(作为后台思考的猜测着法)
+    if (Search2.wmvPvLine[0] != 0) {
+        PopPvLine();
+        dwMoveStr = MOVE_COORD(Search2.wmvPvLine[0]);
+//        printf("bestmove %.4s", (const char *) &dwMoveStr);
+        int best_mv = Search2.wmvPvLine[0];
+        std::string retSource("-1"), retTarget("-1");
+        retSource[0] = FILE_X(SRC(best_mv)) - FILE_LEFT + 'a';
+        retSource[1] = '9' - RANK_Y(SRC(best_mv)) + RANK_TOP;
+        retTarget[0] = FILE_X(DST(best_mv)) - FILE_LEFT + 'a';
+        retTarget[1] = '9' - RANK_Y(DST(best_mv)) + RANK_TOP;
+        Json::Value ret;
+        ret["response"]["source"] = retSource;
+        ret["response"]["target"] = retTarget;
+        Json::FastWriter writer;
+        std::cout << writer.write(ret) << std::endl;
+        if (Search2.wmvPvLine[1] != 0) {
+            dwMoveStr = MOVE_COORD(Search2.wmvPvLine[1]);
+//            printf(" ponder %.4s", (const char *) &dwMoveStr);
+        }
+
+        // 13. 判断是否认输或提和，但是经过唯一着法检验的不适合认输或提和(因为搜索深度不够)
+        if (!bUnique) {
+            if (vlLast > -WIN_VALUE && vlLast < -RESIGN_VALUE) {
+//                printf(" resign");
+            } else if (Search.bDraw && !Search.pos.NullSafe() && vlLast < DRAW_OFFER_VALUE * 2) {
+//                printf(" draw");
+            }
+        }
+    } else {
+        OutputBotzoneNone();
+//        printf("nobestmove");
+    }
+//    printf("\n");
+//    fflush(stdout);
+#endif
+}
+
+void OutputBotzoneNone() {
+    Json::Value ret;
+    ret["response"]["source"] = std::string("-1");
+    ret["response"]["target"] = std::string("-1");
+    Json::FastWriter writer;
+    std::cout << writer.write(ret) << std::endl;
 }

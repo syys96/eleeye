@@ -27,6 +27,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #endif
 #include "pregen.h"
 #include "position.h"
+#include "../botzone/jsoncpp/json.h"
+#include <iostream>
 
 #ifndef SEARCH_H
 #define SEARCH_H
@@ -70,4 +72,8 @@ void PopLeaf(PositionStruct &pos);
 // 搜索的启动过程
 void SearchMain(int nDepth);
 
+// 搜索的启动过程
+void SearchMainBotzone(int nDepth);
+
+void OutputBotzoneNone();
 #endif

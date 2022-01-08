@@ -18,3 +18,19 @@ add_executable(eleeye eleeye/eleeye.cpp
                         base/parse.h base/pipe.h base/pipe.cpp
                         base/rc4prng.h
                         base/x86asm.h)
+
+add_executable(botzone_judge botzone/botzone_bot.cpp
+        eleeye/ucci.cpp eleeye/ucci.h
+        eleeye/pregen.cpp eleeye/pregen.h
+        eleeye/position.cpp eleeye/position.h
+        eleeye/genmoves.cpp
+        eleeye/hash.cpp eleeye/hash.h
+        eleeye/book.cpp eleeye/book.h
+        eleeye/movesort.cpp eleeye/movesort.h
+        eleeye/search.cpp eleeye/search.h
+        eleeye/preeval.cpp eleeye/pregen.h
+        eleeye/evaluate.cpp
+        base/base.h base/base2.h
+        base/parse.h base/pipe.h base/pipe.cpp
+        base/rc4prng.h
+        base/x86asm.h)
