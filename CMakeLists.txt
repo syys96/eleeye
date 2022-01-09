@@ -19,7 +19,7 @@ add_executable(eleeye eleeye/eleeye.cpp
                         base/rc4prng.h
                         base/x86asm.h)
 
-add_executable(botzone_judge botzone/botzone_bot.cpp
+add_executable(botzone_bot botzone/botzone_bot.cpp
         eleeye/ucci.cpp eleeye/ucci.h
         eleeye/pregen.cpp eleeye/pregen.h
         eleeye/position.cpp eleeye/position.h
@@ -34,3 +34,5 @@ add_executable(botzone_judge botzone/botzone_bot.cpp
         base/parse.h base/pipe.h base/pipe.cpp
         base/rc4prng.h
         base/x86asm.h)
+
+add_executable(bot botzone/allInOne.cpp)
