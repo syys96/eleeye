@@ -1940,9 +1940,11 @@ int main() {
             if (IN_BOARD(sqSrc) && IN_BOARD(sqDst)) {
                 int mv = MOVE(sqSrc, sqDst);
                 if (mv != 0) {
-                    if (Search.pos.LegalMove(mv) && Search.pos.MakeMove(mv) && Search.pos.LastMove().CptDrw > 0) {
-                        // 始终让pos.nMoveNum反映没吃子的步数
-                        Search.pos.SetIrrev();
+                    if (Search.pos.LegalMove(mv) && Search.pos.MakeMove(mv)) {
+                        if (Search.pos.LastMove().CptDrw > 0) {
+                            // 始终让pos.nMoveNum反映没吃子的步数
+                            Search.pos.SetIrrev();
+                        }
                     } else {
                         throw std::runtime_error("input is not valid!");
                     }
@@ -1963,9 +1965,11 @@ int main() {
             if (IN_BOARD(sqSrc) && IN_BOARD(sqDst)) {
                 int mv = MOVE(sqSrc, sqDst);
                 if (mv != 0) {
-                    if (Search.pos.LegalMove(mv) && Search.pos.MakeMove(mv) && Search.pos.LastMove().CptDrw > 0) {
-                        // 始终让pos.nMoveNum反映没吃子的步数
-                        Search.pos.SetIrrev();
+                    if (Search.pos.LegalMove(mv) && Search.pos.MakeMove(mv)) {
+                        if (Search.pos.LastMove().CptDrw > 0) {
+                            // 始终让pos.nMoveNum反映没吃子的步数
+                            Search.pos.SetIrrev();
+                        }
                     } else {
                         throw std::runtime_error("input is not valid!");
                     }
@@ -1986,9 +1990,11 @@ int main() {
         if (IN_BOARD(sqSrc) && IN_BOARD(sqDst)) {
             int mv = MOVE(sqSrc, sqDst);
             if (mv != 0) {
-                if (Search.pos.LegalMove(mv) && Search.pos.MakeMove(mv) && Search.pos.LastMove().CptDrw > 0) {
-                    // 始终让pos.nMoveNum反映没吃子的步数
-                    Search.pos.SetIrrev();
+                if (Search.pos.LegalMove(mv) && Search.pos.MakeMove(mv)) {
+                    if (Search.pos.LastMove().CptDrw > 0) {
+                        // 始终让pos.nMoveNum反映没吃子的步数
+                        Search.pos.SetIrrev();
+                    }
                 } else {
                     throw std::runtime_error("input is not valid!");
                 }
@@ -7232,7 +7238,7 @@ static int SearchRoot(int nDepth) {
                 // 7. 搜索到最佳着法时记录主要变例
                 AppendPvLine(Search2.wmvPvLine, mv, wmvPvLine);
 #ifndef CCHESS_A3800
-                PopPvLine(nDepth, vl);
+                PopPvLineBotzone(nDepth, vl);
 #endif
 
                 // 8. 如果要考虑随机性，则Alpha值要作随机浮动，但已搜索到杀棋时不作随机浮动
