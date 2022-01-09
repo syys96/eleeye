@@ -1523,7 +1523,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 //#include "ucci.h"
 #endif
 
-#include "../botzone/jsoncpp/json.h"
+#include "jsoncpp/json.h"
 #include <iostream>
 
 #ifndef SEARCH_H
