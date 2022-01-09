@@ -1917,8 +1917,8 @@ int main() {
 
     string str;
 
-//    getline(cin, str);
-    str = string("{\"requests\":[{\"source\":\"-1\",\"target\":\"-1\"}],\"responses\":[]}");
+    getline(cin, str);
+//    str = string("{\"requests\":[{\"source\":\"-1\",\"target\":\"-1\"}],\"responses\":[]}");
 
     Json::Reader reader;
     Json::Value input;
